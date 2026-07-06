@@ -15,18 +15,69 @@ local gui = Instance.new("ScreenGui", game.CoreGui)
 gui.Name = "FarmGUI"
 
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0,200,0,120)
+frame.Size = UDim2.new(0,200,0,150)
 frame.Position = UDim2.new(0,20,0,200)
 frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
 
+-- 🔝 Верхняя панель
+local top = Instance.new("Frame", frame)
+top.Size = UDim2.new(1,0,0,30)
+top.BackgroundColor3 = Color3.fromRGB(40,40,40)
+
+local title = Instance.new("TextLabel", top)
+title.Size = UDim2.new(1,0,1,0)
+title.Text = "Orb Farm"
+title.TextColor3 = Color3.new(1,1,1)
+title.BackgroundTransparency = 1
+
+-- Кнопки
 local orbBtn = Instance.new("TextButton", frame)
 orbBtn.Size = UDim2.new(1,0,0,50)
+orbBtn.Position = UDim2.new(0,0,0,35)
 orbBtn.Text = "Orbs: OFF"
 
 local eggBtn = Instance.new("TextButton", frame)
 eggBtn.Size = UDim2.new(1,0,0,50)
-eggBtn.Position = UDim2.new(0,0,0,60)
+eggBtn.Position = UDim2.new(0,0,0,90)
 eggBtn.Text = "Egg: OFF"
+
+-- 🖱️ ПЕРЕТАСКИВАНИЕ
+local dragging = false
+local dragInput
+local dragStart
+local startPos
+
+top.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+top.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
 
 --// STATE
 local orbFarm = false
