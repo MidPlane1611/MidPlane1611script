@@ -1,195 +1,173 @@
 --// SERVICES
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UIS = game:GetService("UserInputService")
+local RS = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 
---// CHARACTER
-local char, hrp
-local function loadChar()
-    char = player.Character or player.CharacterAdded:Wait()
-    hrp = char:WaitForChild("HumanoidRootPart")
-end
-
-loadChar()
-player.CharacterAdded:Connect(function()
-    task.wait(1)
-    loadChar()
-end)
-
 --// SETTINGS
-local speed = 4.5 -- ускоренный полёт
-local stepWait = 0.02
-
--- координаты (можешь менять)
-local x1, z1 = 1979, -31963
-local x2, z2 = 1828, -32050
-local y = 16
-local step = 8
-
--- яйцо
-local EGG_ID = "4606f7235b444c568ad0a0da1d0adf9d"
-local EGG_AMOUNT = 55
-
---// STATE
 local orbFarm = false
 local eggFarm = false
 local stopped = false
 
---// MOVE
-local function moveTo(target)
-    while hrp and (hrp.Position - target).Magnitude > 2 and not stopped do
-        local dir = (target - hrp.Position).Unit
-        hrp.CFrame = hrp.CFrame + dir * speed
-        task.wait(stepWait)
-    end
-end
-
---// ORB FARM
-task.spawn(function()
-    while true do
-        if orbFarm and not stopped then
-            local currentZ = z1
-            local direction = true
-
-            while orbFarm and currentZ >= z2 and not stopped do
-                if direction then
-                    moveTo(Vector3.new(x2, y, currentZ))
-                else
-                    moveTo(Vector3.new(x1, y, currentZ))
-                end
-
-                direction = not direction
-                currentZ -= step
-
-                moveTo(Vector3.new(hrp.Position.X, y, currentZ))
-                task.wait(0.1)
-            end
-        else
-            task.wait(1)
-        end
-    end
-end)
-
---// EGG OPEN
-local function openEggs()
-    local remote = ReplicatedStorage
-        :WaitForChild("Network")
-        :WaitForChild("CustomEggs_Hatch")
-
-    local args = {EGG_ID, EGG_AMOUNT}
-
-    pcall(function()
-        remote:InvokeServer(unpack(args))
-    end)
-end
-
-task.spawn(function()
-    while true do
-        if eggFarm and not stopped then
-            openEggs()
-            task.wait(5)
-        else
-            task.wait(1)
-        end
-    end
-end)
+local ORB_STEP = 3
+local SPEED = 2
 
 --// GUI
 local gui = Instance.new("ScreenGui")
-gui.Name = "FarmGUI"
+gui.Name = "FarmGui"
+gui.ResetOnSpawn = false
 gui.Parent = player:WaitForChild("PlayerGui")
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 220, 0, 180)
-frame.Position = UDim2.new(0, 20, 0, 200)
+frame.Parent = gui
+frame.Size = UDim2.new(0, 220, 0, 150)
+frame.Position = UDim2.new(0.4, 0, 0.4, 0)
 frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
 frame.Active = true
-frame.Parent = gui
 
--- TOP BAR
+-- верхняя панель
 local topBar = Instance.new("Frame")
-topBar.Size = UDim2.new(1,0,0,25)
-topBar.BackgroundColor3 = Color3.fromRGB(40,40,40)
 topBar.Parent = frame
+topBar.Size = UDim2.new(1,0,0,30)
+topBar.BackgroundColor3 = Color3.fromRGB(40,40,40)
+topBar.Active = true
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1,0,1,0)
-title.BackgroundTransparency = 1
-title.Text = "Farm Controller"
-title.TextColor3 = Color3.new(1,1,1)
 title.Parent = topBar
+title.Size = UDim2.new(1,0,1,0)
+title.Text = "FARM HUB"
+title.TextColor3 = Color3.new(1,1,1)
+title.BackgroundTransparency = 1
 
--- BUTTONS
-local orbBtn = Instance.new("TextButton")
-orbBtn.Size = UDim2.new(1,0,0,40)
-orbBtn.Position = UDim2.new(0,0,0,30)
+-- кнопки
+local orbBtn = Instance.new("TextButton", frame)
+orbBtn.Position = UDim2.new(0,10,0,40)
+orbBtn.Size = UDim2.new(0,200,0,30)
 orbBtn.Text = "Orbs: OFF"
-orbBtn.Parent = frame
 
-local eggBtn = Instance.new("TextButton")
-eggBtn.Size = UDim2.new(1,0,0,40)
-eggBtn.Position = UDim2.new(0,0,0,75)
+local eggBtn = Instance.new("TextButton", frame)
+eggBtn.Position = UDim2.new(0,10,0,80)
+eggBtn.Size = UDim2.new(0,200,0,30)
 eggBtn.Text = "Eggs: OFF"
-eggBtn.Parent = frame
 
-local stopBtn = Instance.new("TextButton")
-stopBtn.Size = UDim2.new(1,0,0,40)
-stopBtn.Position = UDim2.new(0,0,0,120)
-stopBtn.Text = "EMERGENCY STOP"
-stopBtn.BackgroundColor3 = Color3.fromRGB(170,40,40)
-stopBtn.TextColor3 = Color3.new(1,1,1)
-stopBtn.Parent = frame
+local panicBtn = Instance.new("TextButton", frame)
+panicBtn.Position = UDim2.new(0,10,0,120)
+panicBtn.Size = UDim2.new(0,200,0,25)
+panicBtn.Text = "!!! STOP !!!"
 
---// DRAG SYSTEM (РАБОЧИЙ)
+--// 🔥 СУПЕР СТАБИЛЬНЫЙ DRAG
 local dragging = false
+local dragInput
 local dragStart
 local startPos
 
 topBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = frame.Position
-    end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = frame.Position
+		dragInput = input
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
 end)
 
-UIS.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
+topBar.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		dragInput = input
+	end
 end)
 
 UIS.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
 
-        frame.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
-    end
+		frame.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
 end)
 
---// BUTTON LOGIC
+--// КНОПКИ
 orbBtn.MouseButton1Click:Connect(function()
-    if stopped then return end
-    orbFarm = not orbFarm
-    orbBtn.Text = "Orbs: " .. tostring(orbFarm)
+	if stopped then return end
+	orbFarm = not orbFarm
+	orbBtn.Text = "Orbs: " .. (orbFarm and "ON" or "OFF")
 end)
 
 eggBtn.MouseButton1Click:Connect(function()
-    if stopped then return end
-    eggFarm = not eggFarm
-    eggBtn.Text = "Eggs: " .. tostring(eggFarm)
+	if stopped then return end
+	eggFarm = not eggFarm
+	eggBtn.Text = "Eggs: " .. (eggFarm and "ON" or "OFF")
 end)
 
-stopBtn.MouseButton1Click:Connect(function()
-    orbFarm = false
-    eggFarm = false
-    stopped = true
-    print("🚫 SYSTEM STOPPED")
+--// PANIC (3 клика за 5 сек)
+local clicks = 0
+panicBtn.MouseButton1Click:Connect(function()
+	clicks += 1
+	
+	task.delay(5, function()
+		clicks = 0
+	end)
+
+	if clicks >= 3 then
+		stopped = true
+		orbFarm = false
+		eggFarm = false
+		
+		orbBtn.Text = "Orbs: OFF"
+		eggBtn.Text = "Eggs: OFF"
+		panicBtn.Text = "STOPPED"
+	end
+end)
+
+--// ОРБ ФАРМ
+task.spawn(function()
+	while true do
+		task.wait(0.05 / SPEED)
+
+		if orbFarm and not stopped then
+			local char = player.Character
+			if char and char:FindFirstChild("HumanoidRootPart") then
+				local hrp = char.HumanoidRootPart
+				
+				local orbsFolder = workspace:FindFirstChild("Orbs")
+				if orbsFolder then
+					local orbs = orbsFolder:GetChildren()
+					
+					for i = 1, #orbs, ORB_STEP do
+						local orb = orbs[i]
+						if orb and orb:IsA("BasePart") then
+							hrp.CFrame = orb.CFrame
+							task.wait(0.01 / SPEED)
+						end
+					end
+				end
+			end
+		end
+	end
+end)
+
+--// ЯЙЦА (55)
+task.spawn(function()
+	while true do
+		task.wait(4)
+
+		if eggFarm and not stopped then
+			local args = {
+				"4606f7235b444c568ad0a0da1d0adf9d",
+				55
+			}
+
+			RS:WaitForChild("Network"):WaitForChild("CustomEggs_Hatch"):InvokeServer(unpack(args))
+		end
+	end
 end)
