@@ -3,7 +3,7 @@ local x1, z1 = 1979, -31963
 local x2, z2 = 1828, -32050
 local y = 16
 local step = 8
-local speed = 60
+local speed = 240
 
 --// SERVICES
 local player = game.Players.LocalPlayer
