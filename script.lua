@@ -2,12 +2,13 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UIS = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 
 --// SETTINGS
-local flySpeed = 120 -- скорость (увеличена)
-local orbOffset = 6 -- расстояние между точками (в 3 раза больше)
+local flySpeed = 180
+local orbOffset = 8
 
 --// STATE
 local flying = false
@@ -15,23 +16,26 @@ local orbFarm = false
 local autoEgg = false
 local emergencyClicks = {}
 
+local flyConnection
+local orbConnection
+
 --// GUI
 local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
 gui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 220, 0, 180)
+frame.Size = UDim2.new(0, 230, 0, 190)
 frame.Position = UDim2.new(0.4, 0, 0.3, 0)
 frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
 
--- верхняя панель (для перетаскивания)
+-- верхняя панель
 local topBar = Instance.new("Frame", frame)
 topBar.Size = UDim2.new(1,0,0,30)
 topBar.BackgroundColor3 = Color3.fromRGB(50,50,50)
 
 local title = Instance.new("TextLabel", topBar)
 title.Size = UDim2.new(1,0,1,0)
-title.Text = "Orb Farm GUI"
+title.Text = "Orb Farm"
 title.TextColor3 = Color3.new(1,1,1)
 title.BackgroundTransparency = 1
 
@@ -55,7 +59,7 @@ end)
 
 RunService.RenderStepped:Connect(function()
 	if dragging then
-		local delta = game:GetService("UserInputService"):GetMouseLocation() - dragStart
+		local delta = UIS:GetMouseLocation() - dragStart
 		frame.Position = UDim2.new(
 			startPos.X.Scale,
 			startPos.X.Offset + delta.X,
@@ -80,11 +84,12 @@ end
 
 --// FUNCTIONS
 
--- 🔹 ПОЛЕТ ЧЕРЕЗ CFrame
+-- 🔹 ПОЛЕТ (CFrame)
 local function startFly()
+	if flyConnection then flyConnection:Disconnect() end
 	flying = true
 
-	RunService.RenderStepped:Connect(function(dt)
+	flyConnection = RunService.RenderStepped:Connect(function(dt)
 		if not flying then return end
 
 		local char = player.Character
@@ -95,36 +100,38 @@ local function startFly()
 
 		local target = hrp.Position + (hrp.CFrame.LookVector * orbOffset)
 
-		-- плавное движение через lerp
 		hrp.CFrame = hrp.CFrame:Lerp(
 			CFrame.new(target),
-			math.clamp(flySpeed * dt / 50, 0, 1)
+			math.clamp(flySpeed * dt / 60, 0, 1)
 		)
 	end)
 end
 
 local function stopFly()
 	flying = false
+	if flyConnection then flyConnection:Disconnect() end
 end
 
 -- 🔹 ОРБЫ
 local function startOrbs()
+	if orbConnection then orbConnection:Disconnect() end
 	orbFarm = true
 
-	RunService.RenderStepped:Connect(function()
-		if not orbFarm then return end
-
-		local char = player.Character
-		if not char then return end
-
-		local hrp = char:FindFirstChild("HumanoidRootPart")
-		if not hrp then return end
-
-		for _, v in pairs(workspace:GetDescendants()) do
-			if v.Name:lower():find("orb") and v:IsA("BasePart") then
-				hrp.CFrame = CFrame.new(v.Position + Vector3.new(0,2,0))
-				task.wait(0.05)
+	orbConnection = task.spawn(function()
+		while orbFarm do
+			local char = player.Character
+			if char then
+				local hrp = char:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					for _, v in pairs(workspace:GetDescendants()) do
+						if v:IsA("BasePart") and v.Name:lower():find("orb") then
+							hrp.CFrame = CFrame.new(v.Position + Vector3.new(0,2,0))
+							task.wait(0.07)
+						end
+					end
+				end
 			end
+			task.wait(0.2)
 		end
 	end)
 end
@@ -133,22 +140,29 @@ local function stopOrbs()
 	orbFarm = false
 end
 
--- 🔹 АВТО ЯЙЦА (55)
+-- 🔹 АВТО ЯЙЦА (FIXED)
 local function startEgg()
 	autoEgg = true
 
 	task.spawn(function()
+		local network = ReplicatedStorage:WaitForChild("Network")
+
 		while autoEgg do
-			local args = {
-				"4606f7235b444c568ad0a0da1d0adf9d",
-				55
-			}
+			-- важный запрос
+			network:WaitForChild("Index: Request Hatch Count"):InvokeServer()
+			task.wait(0.15)
 
-			ReplicatedStorage:WaitForChild("Network")
-				:WaitForChild("CustomEggs_Hatch")
-				:InvokeServer(unpack(args))
+			for i = 1, 11 do
+				local args = {
+					"4606f7235b444c568ad0a0da1d0adf9d",
+					5
+				}
 
-			task.wait(4)
+				network:WaitForChild("CustomEggs_Hatch"):InvokeServer(unpack(args))
+				task.wait(0.2)
+			end
+
+			task.wait(3)
 		end
 	end)
 end
@@ -157,12 +171,11 @@ local function stopEgg()
 	autoEgg = false
 end
 
--- 🔹 ЭКСТРЕННОЕ ВЫКЛЮЧЕНИЕ (3 клика за 5 сек)
+-- 🔹 ЭКСТРЕННОЕ ВЫКЛЮЧЕНИЕ
 local function emergencyStop()
 	local now = tick()
 	table.insert(emergencyClicks, now)
 
-	-- удаляем старые
 	for i = #emergencyClicks, 1, -1 do
 		if now - emergencyClicks[i] > 5 then
 			table.remove(emergencyClicks, i)
@@ -170,9 +183,9 @@ local function emergencyStop()
 	end
 
 	if #emergencyClicks >= 3 then
-		flying = false
-		orbFarm = false
-		autoEgg = false
+		stopFly()
+		stopOrbs()
+		stopEgg()
 		print("ВСЕ ВЫКЛЮЧЕНО")
 	end
 end
